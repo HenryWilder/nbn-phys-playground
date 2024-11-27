@@ -3,7 +3,7 @@ use raylib::prelude as rl;
 // use crate::VectorMath;
 
 #[derive(Debug, Clone, Copy, Default)]
-struct Vec3 {
+pub struct Vec3 {
     x: f32,
     y: f32,
     z: f32,
@@ -202,33 +202,49 @@ impl DivAssign<f32> for Vec3 {
 }
 
 macro_rules! rule_op {
-    (@impl $({$($impliedby:tt)+})? $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
+    (@impl $doc:expr, $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
         impl $trait<$b> for $a {
             type Output = $c;
-            #[doc = stringify!($($($impliedby)+ => )? $c = $a $op $b)]
+            #[doc = $doc]
             fn $fn(self, rhs: $b) -> Self::Output {
                 $c(self.0 $op rhs.0)
             }
         }
     };
 
-    ($c:ident = $a:ident + $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Add::add($a + $b = $c) } };
-    ($c:ident = $a:ident - $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Sub::sub($a - $b = $c) } };
-    ($c:ident = $a:ident * $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Mul::mul($a * $b = $c) } };
-    ($c:ident = $a:ident / $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Div::div($a / $b = $c) } };
+    (@doc $({$($impliedby:tt)+})? $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
+        rule_op!(@impl stringify!($($($impliedby)+ => )? $c = $a $op $b), $trait::$fn($a $op $b = $c));
+    };
+
+    ($c:ident = $a:ident + $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Add::add($a + $b = $c) } };
+    ($c:ident = $a:ident - $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Sub::sub($a - $b = $c) } };
+    ($c:ident = $a:ident * $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Mul::mul($a * $b = $c) } };
+    ($c:ident = $a:ident / $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Div::div($a / $b = $c) } };
 }
 
 macro_rules! calc_rule {
     ($self:ident += $rhs:ident) => {
         calc_rule!($self = $self + $rhs);
-        impl AddAssign<$rhs> for $self { #[doc = stringify!($self = $self + $rhs)] fn add_assign(&mut self, rhs: $rhs) { self.0 += rhs.0; } }
-        impl SubAssign<$rhs> for $self { #[doc = stringify!($self = $self + $rhs => $self = $self - $rhs)] fn sub_assign(&mut self, rhs: $rhs) { self.0 -= rhs.0; } }
+        impl AddAssign<$rhs> for $self {
+            #[doc = stringify!($self = $self + $rhs)]
+            fn add_assign(&mut self, rhs: $rhs) { self.0 += rhs.0; }
+        }
+        impl SubAssign<$rhs> for $self {
+            #[doc = stringify!($self = $self + $rhs => $self = $self - $rhs)]
+            fn sub_assign(&mut self, rhs: $rhs) { self.0 -= rhs.0; }
+        }
     };
 
     ($self:ident *= $rhs:ident) => {
         calc_rule!($self = $self * $rhs);
-        impl MulAssign<$rhs> for $self { #[doc = stringify!($self = $self * $rhs)] fn mul_assign(&mut self, rhs: $rhs) { self.0 *= rhs.0; } }
-        impl DivAssign<$rhs> for $self { #[doc = stringify!($self = $self * $rhs => $self = $self / $rhs)] fn div_assign(&mut self, rhs: $rhs) { self.0 /= rhs.0; } }
+        impl MulAssign<$rhs> for $self {
+            #[doc = stringify!($self = $self * $rhs)]
+            fn mul_assign(&mut self, rhs: $rhs) { self.0 *= rhs.0; }
+        }
+        impl DivAssign<$rhs> for $self {
+            #[doc = stringify!($self = $self * $rhs => $self = $self / $rhs)]
+            fn div_assign(&mut self, rhs: $rhs) { self.0 /= rhs.0; }
+        }
     };
 
     ($c:ident = $a:ident + $b:ident, ..) => { rule_op!($c = $a + $b); rule_op!($a = $c - $b <== $c = $a + $b); rule_op!($b = $c - $a <== $c = $a + $b); rule_op!($c = $b + $a <== $c = $a + $b); };
@@ -244,128 +260,210 @@ macro_rules! calc_rule {
 macro_rules! rules {
     () => {};
 
-    // Prevent duplicate implementations
     ($c:ident = $a:ident $op:tt $b:ident, .. $($rest:tt)*) => {
         calc_rule!{ $c = $a $op $b, .. }
         rules!($($rest)*);
     };
 
+    // Prevent duplicate implementations
     ($c:ident = $a:ident $op:tt $b:ident $($rest:tt)*) => {
         calc_rule!{ $c = $a $op $b }
         rules!($($rest)*);
     };
+
+    ($self:ident += $rhs:ident $($rest:tt)*) => {
+        calc_rule!{ $self += $rhs }
+        rules!($($rest)*);
+    };
+
+    ($self:ident *= $rhs:ident $($rest:tt)*) => {
+        calc_rule!{ $self *= $rhs }
+        rules!($($rest)*);
+    };
+}
+
+pub trait CalcVector: Sized {
+    type Magnitude;
+    fn clear(&mut self);
+    fn magnitude(self) -> Self::Magnitude;
+    /// Get the square of the magnitude, saving a sqrt.
+    fn magnitude_sqr(self) -> Self::Magnitude;
+    fn direction(self) -> Direction;
+    /// Decompose a vector into its direction (without magnitude) and its magnitude (without direction)
+    fn direction_and_magnitude(self) -> (Direction, Self::Magnitude);
+    fn direction_and_distance(self, other: Self) -> (Direction, Self::Magnitude) where Self: Sub<Output = Self>;
 }
 
 macro_rules! calc_wrapper {
     (
-        $name:ident in $units:literal ~ $mag:ident
-        $(+= $add_assign:ident,)*
-        $(*= $mul_assign:ident,)*
-        $(= $a:ident $op:tt $b:ident,)*
+        $name:ident $(in $units:literal)? ~ $mag:ident
     ) => {
-        #[doc = $units]
+        $(#[doc = $units])?
         #[derive(Debug, Clone, Copy, Default)]
         pub struct $name(pub Vec3);
         impl $name {
             pub const fn zero() -> Self {
                 Self(Vec3::zero())
             }
-            pub fn magnitude(self) -> $mag {
-                $mag(self.0.length())
-            }
-            pub fn magnitude_sqr(self) -> $mag {
-                $mag(self.0.length_sqr())
-            }
-            pub fn direction(self) -> Self {
-                Self(self.0.normalized())
-            }
-            pub fn direction_and_magnitude(self) -> (Self, $mag) {
-                let mag = self.0.length();
-                (Self(self.0 * mag.recip()), $mag(mag))
+        }
+        impl From<Vec3> for $name {
+            fn from(value: Vec3) -> Self {
+                Self(value)
             }
         }
-        $(calc_rule!{ $name += $add_assign })*
-        $(calc_rule!{ $name *= $mul_assign })*
-        $(calc_rule!{ $name = $a $op $b })*
+        impl Neg for $name {
+            type Output = Self;
+            fn neg(self) -> Self::Output {
+                Self(-self.0)
+            }
+        }
+        impl CalcVector for $name {
+            type Magnitude = $mag;
+            fn clear(&mut self) {
+                *self = Self::zero();
+            }
+            fn magnitude(self) -> $mag {
+                $mag(self.0.length())
+            }
+            fn magnitude_sqr(self) -> $mag {
+                $mag(self.0.length_sqr())
+            }
+            fn direction(self) -> Direction {
+                Direction(self.0.normalized())
+            }
+            fn direction_and_magnitude(self) -> (Direction, $mag) {
+                let len = self.0.length();
+                (if len != 0.0 {
+                    Direction(self.0 * len.recip())
+                } else {
+                    Direction::zero()
+                }, $mag(len))
+            }
+            fn direction_and_distance(self, other: Self) -> (Direction, $mag)
+            where Self: Sub<Output = Self> {
+                (self - other).direction_and_magnitude()
+            }
+        }
     };
 
     (
-        $name:ident in $units:literal
-        $(+= $add_assign:ident,)*
-        $(*= $mul_assign:ident,)*
-        $(= $a:ident $op:tt $b:ident,)*
+        $name:ident $(in $units:literal)?
     ) => {
-        #[doc = $units]
+        $(#[doc = $units])?
+        #[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd)]
         pub struct $name(pub f32);
-        $(calc_rule!{ $name += $add_assign })*
-        $(calc_rule!{ $name *= $mul_assign })*
-        $(calc_rule!{ $name = $a $op $b })*
+        impl $name {
+            pub const fn zero() -> Self {
+                Self(0.0)
+            }
+            pub fn inverse_square(self) -> Self {
+                Self(self.0.powi(2).recip())
+            }
+        }
+        impl Neg for $name {
+            type Output = Self;
+            fn neg(self) -> Self::Output {
+                Self(-self.0)
+            }
+        }
     };
 }
 
 macro_rules! calc {
+    // unitless scalar
+    (@auto_rules $mag:ident) => {
+        rules!{
+            $mag += $mag
+            $mag *= Scale
+        }
+    };
+    // unitful scalar
+    (@auto_rules $mag:ident in $mag_units:literal) => {
+        rules!{
+            $mag += $mag
+            $mag *= Scale
+        }
+    };
+
+    // unitless vector
+    (@auto_rules $name:ident [$mag:ident $(in $mag_units:literal)?]) => {
+        rules!{
+            $name += $name
+            $name *= Scale
+        }
+        calc!(@auto_rules $mag $(in $mag_units)?);
+    };
+    // unitful vector
+    (@auto_rules $name:ident in $units:literal [$mag:ident $(in $mag_units:literal)?]) => {
+        rules!{
+            $name += $name
+            $name *= Scale
+            $name += $mag
+            $name = Direction * $mag
+            $name = $mag * Direction
+        }
+        calc!(@auto_rules $mag $(in $mag_units)?);
+    };
+
     (
-        $(
-            $name:ident $(~ $mag:ident)? in $units:literal
-            $(+= $add_assign:ident,)*
-            $(*= $mul_assign:ident,)*
-            $(= $a:ident $op:tt $b:ident,)*
-        )+
+        $($name:ident $(in $units:literal)? $([ $mag:ident $(in $mag_units:literal)? ])?;)*
     ) => {
         $(
+            $(
+                calc_wrapper!{
+                    $mag $(in $mag_units)?
+                }
+            )?
             calc_wrapper!{
-                $name in $units $(~ $mag)?
-                $(+= $add_assign,)*
-                $(*= $mul_assign,)*
-                $(= $a $op $b,)*
+                $name $(in $units)? $(~ $mag)?
             }
-        )+
+            calc!(@auto_rules $name $(in $units)? $([$mag $(in $mag_units)?])?);
+        )*
     };
 }
 
 calc!{
-    Scale                             in "scalar"         += Self,                  *= Self,
-    Time                              in "s"              += Self,                  *= Scale,
-    Length                            in "m"              += Self,                  *= Scale,
-    Mass                              in "kg"             += Self,                  *= Scale,
-    Position      ~ Length            in "(m,m,m)"        += Self, += Length,       *= Scale,
-    Area                              in "m²"             += Self,                  *= Scale,
-    Volume                            in "m³"             += Self,                  *= Scale,
-    Speed                             in "m/s"            += Self,                  *= Scale,
-    Velocity      ~ Speed             in "(m,m,m)/s"      += Self, += Speed,        *= Scale,
-    Acceleration                      in "m/s/s"          += Self,                  *= Scale,
-    AccelerationVector ~ Acceleration in "(m,m,m)/s/s"    += Self, += Acceleration, *= Scale,
-    Force                             in "kg*m/s/s"       += Self,                  *= Scale,
-    ForceVector        ~ Force        in "kg*(m,m,m)/s/s" += Self, += Force,        *= Scale,
-    Pressure                          in "kg/m²"          += Self,                  *= Scale,
+    Direction [ Scale ];
+    Time in "s";
+    Mass in "kg";
+    Displacement in "(m,m,m)" [ Distance in "m" ];
+    Area in "m²";
+    Volume in "m³";
+    Velocity in "(m,m,m)/s" [ Speed in "m/s" ];
+    AccelerationVector in "(m,m,m)/s²" [ AccelerationScalar in "m/s²" ];
+    ForceVector in "kg*(m,m,m)/s²" [ ForceScalar in "kg*m/s²" ];
+    Pressure in "kg*m/s²/m²";
+    Density in "kg/m³";
 }
 
 rules!{
-    Speed    = Length   / Time, ..
-    Velocity = Position / Time, ..
+    Speed    = Distance     / Time, ..
+    Velocity = Displacement / Time, ..
 
-    Acceleration       = Speed    / Time, ..
+    AccelerationScalar = Speed    / Time, ..
     AccelerationVector = Velocity / Time, ..
 
-    Force       = Mass * Acceleration, ..
+    ForceScalar = Mass * AccelerationScalar, ..
     ForceVector = Mass * AccelerationVector, ..
 
-    Pressure = Force / Area, ..
+    Pressure = ForceScalar / Area, ..
 
-    Area = Length * Length
+    Area = Distance * Distance
 
-    Volume = Area * Length, ..
+    Volume = Area * Distance, ..
+
+    Density = Mass / Volume, ..
 }
 
 pub struct MassPoint {
-    pub position: Position,
+    pub position: Displacement,
     pub mass: Mass,
     pub velocity: Velocity,
     pub force: ForceVector,
 }
 
-impl AddAssign<Position> for MassPoint {
-    fn add_assign(&mut self, rhs: Position) {
+impl AddAssign<Displacement> for MassPoint {
+    fn add_assign(&mut self, rhs: Displacement) {
         self.position += rhs;
     }
 }
@@ -381,48 +479,46 @@ impl AddAssign<ForceVector> for MassPoint {
 }
 impl AddAssign<AccelerationVector> for MassPoint {
     fn add_assign(&mut self, rhs: AccelerationVector) {
-        self.force += rhs * self.mass;
+        let mass = self.mass;
+        self.force += rhs * mass;
     }
 }
 
 impl MassPoint {
-    pub const fn init(position: Position, mass: Mass) -> MassPointBuilder {
+    pub const fn init(position: Displacement, mass: Mass) -> MassPointBuilder {
         MassPointBuilder::new(position, mass)
     }
 
-    // pub fn apply_point_force(&mut self, source: &PointForce) {
-    //     let delta = self.position - source.position;
-    //     let distance_sqr = delta.length_sqr();
-    //     if distance_sqr != 0.0 {
-    //         let force_direction = delta / distance_sqr.sqrt(); // normalize
-    //         self.add_force(force_direction * source.force);
-    //     }
-    // }
+    pub fn apply_point_force(&mut self, source: &PointForce) {
+        let (direction, distance) = self.position.direction_and_distance(source.position);
+        let force = source.strength * direction * distance.inverse_square();
+        *self += force;
+    }
 
     pub fn resolve(mut self, dt: Time) {
-        self.velocity += self.force / self.mass * dt;
-        self.force = ForceVector::zero();
-        self.position += self.velocity * dt;
+        self += self.force / self.mass * dt;
+        self.force.clear();
+        self += self.velocity * dt;
     }
 }
 
 pub struct MassPointBuilder {
-    position: Position,
+    position: Displacement,
     mass: Mass,
-    velocity: Option<Velocity>,
+    velocity: Velocity,
 }
 
 impl MassPointBuilder {
-    pub const fn new(position: Position, mass: Mass) -> Self {
+    pub const fn new(position: Displacement, mass: Mass) -> Self {
         Self {
             position,
             mass,
-            velocity: None,
+            velocity: Velocity::zero(),
         }
     }
 
-    pub const fn initial_velocity(&mut self, velocity: Velocity) -> &mut Self {
-        self.velocity = Some(velocity);
+    pub const fn initial_velocity(mut self, velocity: Velocity) -> Self {
+        self.velocity = velocity;
         self
     }
 
@@ -430,7 +526,7 @@ impl MassPointBuilder {
         MassPoint {
             position: self.position,
             mass: self.mass,
-            velocity: self.velocity.unwrap_or(Velocity::zero()),
+            velocity: self.velocity,
             force: ForceVector::zero(),
         }
     }
@@ -487,6 +583,6 @@ impl RigidBody {
 }
 
 pub struct PointForce {
-    pub position: Vec3,
-    pub force: f32,
+    pub position: Displacement,
+    pub strength: ForceScalar,
 }

@@ -19,15 +19,15 @@ fn main() {
     rl.set_target_fps(60);
     rl.disable_cursor();
 
-    let mut sim = PropulsionSimulation::new(
-        Vector3::zero(),
-        5.0,
-        0.1,
-        1.0,
-        Vector3::new(0.1, 0.1, 0.0),
-        Vector3::new(8.0, 0.0, 0.0),
-        Vector3::new(0.0, -9.8, 0.0),
-    );
+    // let mut sim = PropulsionSimulation::new(
+    //     Vector3::zero(),
+    //     5.0,
+    //     0.1,
+    //     1.0,
+    //     Vector3::new(0.1, 0.1, 0.0),
+    //     Vector3::new(8.0, 0.0, 0.0),
+    //     Vector3::new(0.0, -9.8, 0.0),
+    // );
 
     let mut camera = Camera3D::perspective(Vector3::new(10.0, 10.0, 10.0), Vector3::zero(), Vector3::up(), 45.0);
 
@@ -38,6 +38,6 @@ fn main() {
         d.clear_background(Color::BLACK);
         let mut d = d.begin_mode3D(camera);
         d.draw_debug_world_grid(1.0, 5, Color::RED, Color::GREEN, Color::BLUE, Some(Color::WHITE));
-        sim.draw(&mut d);
+        // sim.draw(&mut d);
     }
 }
