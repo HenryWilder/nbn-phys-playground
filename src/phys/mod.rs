@@ -38,11 +38,12 @@ impl MassPoint {
         MassPointBuilder::new(position, mass)
     }
 
+    /// Apply a force from a point-source with inverse square falloff
     pub fn apply_point_force(&mut self, source: &PointForce) {
         let (direction, distance) = self.position.direction_and_distance(source.center);
         let area = distance * distance;
         let pressure = source.force / area;
-        let force = pressure;
+        let force = pressure * Area(1.0) * direction;
         *self += force;
     }
 
@@ -84,17 +85,15 @@ impl MassPointBuilder {
 }
 
 pub struct Fluid {
-    /// density = mass / volume
-    density: f32,
-    // /// pressure = force / area
-    // pressure: f32,
-    // /// force = viscosity * area * rate of sheer deformation
-    // viscosity: f32,
-    // /// specific volume = volume / mass
-    // specific_volume: f32,
+    density: Density,
+    pressure: Pressure,
+    /// force = viscosity * area * rate of sheer deformation
+    viscosity: f32,
+    /// specific volume = volume / mass
+    specific_volume: SpecificVolume,
 }
-const AIR: Fluid = Fluid { density: 1.225 };
-const WATER: Fluid = Fluid { density: 1.0 };
+// const AIR: Fluid = Fluid { density: 1.225 };
+// const WATER: Fluid = Fluid { density: 1.0 };
 
 /// Positionless shape
 pub enum Form {
@@ -102,21 +101,21 @@ pub enum Form {
 }
 
 impl Form {
-    pub const fn drag_coefficient(&self) -> f32 {
+    pub const fn drag_coefficient(&self) -> Scale {
         match self {
-            Form::Sphere { .. } => 0.47,
+            Form::Sphere { .. } => Scale(0.47),
         }
     }
 
-    pub fn volume(&self) -> f32 {
+    pub fn volume(&self) -> Volume {
         match self {
-            Form::Sphere { radius } => 4.0 * std::f32::consts::FRAC_PI_3 * radius.powi(3),
+            Form::Sphere { radius } => Volume(4.0 * std::f32::consts::FRAC_PI_3 * radius.powi(3)),
         }
     }
 
-    pub fn surface_area(&self) -> f32 {
+    pub fn surface_area(&self) -> Area {
         match self {
-            Form::Sphere { radius } => 4.0 * std::f32::consts::PI * radius.powi(2),
+            Form::Sphere { radius } => Area(4.0 * std::f32::consts::PI * radius.powi(2)),
         }
     }
 }
@@ -135,5 +134,5 @@ impl RigidBody {
 
 pub struct PointForce {
     pub center: Displacement,
-    pub force: Pressure,
+    pub force: ForceScalar,
 }

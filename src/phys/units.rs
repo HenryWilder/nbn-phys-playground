@@ -2,24 +2,28 @@ use std::ops::*;
 use super::vec3::*;
 
 macro_rules! rule_op {
-    (@impl $doc:expr, $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
+    (@impl $({$($impliedby:tt)+})? $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
         impl $trait<$b> for $a {
             type Output = $c;
-            #[doc = $doc]
+            #[doc = stringify!($($($impliedby)+ => )? $c = $a $op $b)]
             fn $fn(self, rhs: $b) -> Self::Output {
                 $c(self.0 $op rhs.0)
             }
         }
     };
 
-    (@doc $({$($impliedby:tt)+})? $trait:ident::$fn:ident($a:ident $op:tt $b:ident = $c:ident)) => {
-        rule_op!(@impl stringify!($($($impliedby)+ => )? $c = $a $op $b), $trait::$fn($a $op $b = $c));
+    ($c:ident = $a:ident + $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Add::add($a + $b = $c) } };
+    ($c:ident = $a:ident - $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Sub::sub($a - $b = $c) } };
+    ($c:ident = $a:ident * $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Mul::mul($a * $b = $c) } };
+    ($c:ident = $a:ident / $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @impl $({$($impliedby)+})? Div::div($a / $b = $c) } };
+    ($c:ident =        1 / $b:ident $(<== $($impliedby:tt)+)?) => {
+        impl $b {
+            #[doc = stringify!($($($impliedby)+ => )? $c = 1 / $b)]
+            pub fn recip(self) -> $c {
+                $c(1.0 / self.0)
+            }
+        }
     };
-
-    ($c:ident = $a:ident + $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Add::add($a + $b = $c) } };
-    ($c:ident = $a:ident - $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Sub::sub($a - $b = $c) } };
-    ($c:ident = $a:ident * $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Mul::mul($a * $b = $c) } };
-    ($c:ident = $a:ident / $b:ident $(<== $($impliedby:tt)+)?) => { rule_op!{ @doc $({$($impliedby)+})? Div::div($a / $b = $c) } };
 }
 
 macro_rules! calc_rule {
@@ -55,6 +59,7 @@ macro_rules! calc_rule {
     ($c:ident = $a:ident - $b:ident    ) => { rule_op!($c = $a - $b); rule_op!($a = $c + $b <== $c = $a - $b); };
     ($c:ident = $a:ident * $b:ident    ) => { rule_op!($c = $a * $b); rule_op!($a = $c / $b <== $c = $a * $b); };
     ($c:ident = $a:ident / $b:ident    ) => { rule_op!($c = $a / $b); rule_op!($a = $c * $b <== $c = $a / $b); };
+    ($c:ident =        1 / $b:ident    ) => { rule_op!($c =  1 / $b); rule_op!($b =  1 / $c <== $c =  1 / $b); };
 }
 
 macro_rules! rules {
@@ -68,6 +73,11 @@ macro_rules! rules {
     // Prevent duplicate implementations
     ($c:ident = $a:ident $op:tt $b:ident $($rest:tt)*) => {
         calc_rule!{ $c = $a $op $b }
+        rules!($($rest)*);
+    };
+
+    ($c:ident = 1 / $b:ident $($rest:tt)*) => {
+        calc_rule!{ $c = 1 / $b }
         rules!($($rest)*);
     };
 
@@ -234,6 +244,7 @@ calc!{
     MomentumVector     in "kg*(m,m,m)/s"  [ MomentumScalar     in "kg*m/s"  ];
     Pressure           in "kg*m/s²/m²";
     Density            in "kg/m³";
+    SpecificVolume     in "m³/kg";
     Energy             in "kg*m²/s²";
     Power              in "kg*m²/s³";
 }
@@ -242,7 +253,7 @@ rules!{
     Speed    = Length       / Time, ..
     Velocity = Displacement / Time, ..
 
-    Frequency = Scale / Time, ..
+    Frequency = 1 / Time
 
     AccelerationScalar = Speed    / Time, ..
     AccelerationVector = Velocity / Time, ..
@@ -262,6 +273,8 @@ rules!{
     Area = Length * Length
 
     Volume = Area * Length, ..
+    SpecificVolume = Volume / Mass, ..
+    SpecificVolume = 1 / Density
 
     Density = Mass / Volume, ..
 
